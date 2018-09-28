@@ -1,13 +1,13 @@
 # This example is using Python 3
 import socket
 import time
-import thread
+import _thread
 import struct
 
 # Get host name, IP address, and port number.
 host_name = socket.gethostname()
 host_ip = socket.gethostbyname(host_name)
-host_port = 8010
+host_port = 8048
 
 # Make a TCP socket object.
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,7 +33,7 @@ def calc(s):
         elif op == '*':
             stack.append(stack.pop() * num)
         elif op == '/':
-            stack.append(stack.pop() / num)
+            stack.append(stack.pop() // num)
     
     stack = []
     num, op = 0, '+'
@@ -55,34 +55,49 @@ def calc(s):
     update(op, num)
     return str(sum(stack))
 
-bufsize = 16
-def handler(conn):
+def recvall(conn, bufsize):
+    data = b''
     while True:
-        data = conn.recv(2)
-        if not data: break
-        exp_num = struct.unpack('!h', data)
-        count = 2
-        ans = bytearray()
-        ans += struct.pack('!h', exp_num)
-        print(exp_num)
-        # for i in range(0, exp_num):
-        #     exp_len = struct.unpack('!h', conn.recv(2))
-        #     count += 2
-        #     exp = ''
-        #     if count + exp_len <= bufsize:
-        #         exp += conn.recv(exp_len).decode('utf-8')
-        #         count += exp_len
-        #     else: 
-        #         exp += conn.recv(bufsize - count).decode('utf-8')
-        #         count = exp_len + count - bufsize
-        #         exp += conn.recv(count).decode('utf-8')
-        #     res = calc(exp)
-        #     ans += struct.pack(len(res))
-        #     ans += res.encode('utf-8')
-        # conn.sendall(ans)
-    conn.close()
+        part = conn.recv(bufsize)
+        data += part
+        if len(part) < bufsize:
+            break
+    return data
+
+def process_data(data):
+    ans = b''
+    exp_num = struct.unpack('!h', data[0: 2])[0]
+    pos = 2
+    ans += struct.pack('!h', exp_num)
+    for i in range(0, exp_num):
+        exp_len = struct.unpack('!h', data[pos: pos + 2])[0]
+        pos += 2
+        exp = data[pos: pos + exp_len].decode('utf-8')
+        pos += exp_len
+        res = calc(exp)
+        print(exp + '=' + res)
+        ans += struct.pack('!h', len(res))
+        ans += res.encode('utf-8')
+    return ans
+
+def mysendall(conn, ans, bufsize):
+    pos = 0
+    end = len(ans)
+    while end > pos:
+        if pos + bufsize > end:
+            conn.sendall(ans[pos: end])
+        else: conn.sendall(ans[pos: pos + 16])
+        pos += 16
+
+def handler(conn):
+    bufsize = 16
+    data = recvall(conn, bufsize)
+    ans = process_data(data)
+    mysendall(conn, ans, bufsize)
+    conn.close()    
+
 
 while True:
     conn, addr = s.accept()
     print('Server connected by', addr,'at', now())
-    thread.start_new(handler, (conn,))
+    _thread.start_new(handler, (conn,))
