@@ -13,7 +13,7 @@ host_port = 8048
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Bind to server IP and port number.
-s.bind(('127.0.0.1', host_port))
+s.bind((host_ip, host_port))
 
 # Listen allow 10 pending connects.
 s.listen(20)
@@ -57,11 +57,15 @@ def calc(s):
 
 def recvall(conn, bufsize):
     data = b''
-    while True:
-        part = conn.recv(bufsize)
-        data += part
-        if len(part) < bufsize:
-            break
+    data += conn.recv(2)
+    len = struct.unpack('!h', data)[0]
+    for i in range(0, len):
+        data += conn.recv(2)
+        exp_len = struct.unpack('!h', data[-2:])[0]
+        if exp_len <= bufsize:
+            data += conn.recv(exp_len)
+        else :
+            data += conn.recv(bufsize) + conn.recv(exp_len - bufsize)
     return data
 
 def process_data(data):
@@ -80,20 +84,11 @@ def process_data(data):
         ans += res.encode('utf-8')
     return ans
 
-def mysendall(conn, ans, bufsize):
-    pos = 0
-    end = len(ans)
-    while end > pos:
-        if pos + bufsize > end:
-            conn.sendall(ans[pos: end])
-        else: conn.sendall(ans[pos: pos + 16])
-        pos += 16
-
 def handler(conn):
     bufsize = 16
     data = recvall(conn, bufsize)
     ans = process_data(data)
-    mysendall(conn, ans, bufsize)
+    conn.sendall(ans)
     conn.close()    
 
 
