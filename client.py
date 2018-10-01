@@ -42,8 +42,6 @@ bufsize = 16
 list = ['3+12', '3+(5-2)*3-2/(3-1)', '6/6', '8+7-5']
 data = create_test(list)
 s.sendall(data)
-res = recvall(s, bufsize)
+res = recvall(s, 16)
 print_res(res)
-
-
 s.close()
